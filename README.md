@@ -1,6 +1,8 @@
 # MouseTremor
 
-Kleines Windows-Programm, das den Mauszeiger regelmäßig minimal bewegt und mit `ESC` beendet wird.
+Kleine Windows-Dialoganwendung, die den Mauszeiger regelmaessig minimal bewegt. Alle paar Sekunden setzt die Anwendung den Mauszeiger auf den Button und drueckt ihn per linkem Mausklick.
+
+Die Mausbewegung pausiert, waehrend der Button gedrueckt wird.
 
 ## Starten
 
@@ -19,10 +21,11 @@ Oder direkt in PowerShell:
 ## Optionen
 
 ```powershell
-.\MouseTremor.ps1 -IntervalSeconds 20 -Pixels 1
+.\MouseTremor.ps1 -PressIntervalSeconds 5 -MoveIntervalMilliseconds 1000 -Pixels 1
 ```
 
-- `IntervalSeconds`: Abstand zwischen den Bewegungen.
-- `Pixels`: Größe der kurzen Bewegung.
+- `PressIntervalSeconds`: Abstand zwischen den automatischen Button-Druecken.
+- `MoveIntervalMilliseconds`: Abstand zwischen den kurzen Mausbewegungen.
+- `Pixels`: Groesse der kurzen Bewegung.
 
-Zum Beenden jederzeit `ESC` drücken.
+Zum Beenden das Fenster schliessen oder `ESC` druecken.
