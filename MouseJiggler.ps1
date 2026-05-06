@@ -14,7 +14,7 @@ $signature = @"
 using System;
 using System.Runtime.InteropServices;
 
-public static class MouseTremorNative
+public static class MouseJigglerNative
 {
     [DllImport("user32.dll")]
     public static extern bool GetCursorPos(out POINT lpPoint);
@@ -44,7 +44,7 @@ $script:PressCount = 0
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "MouseTremor"
+$form.Text = "MouseJiggler"
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
 $form.MaximizeBox = $false
@@ -53,7 +53,7 @@ $form.ClientSize = New-Object System.Drawing.Size(360, 170)
 $form.KeyPreview = $true
 
 $titleLabel = New-Object System.Windows.Forms.Label
-$titleLabel.Text = "MouseTremor laeuft"
+$titleLabel.Text = "MouseJiggler laeuft"
 $titleLabel.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
 $titleLabel.AutoSize = $true
 $titleLabel.Location = New-Object System.Drawing.Point(24, 22)
@@ -86,11 +86,11 @@ $moveTimer.Add_Tick({
         return
     }
 
-    $point = New-Object MouseTremorNative+POINT
-    if ([MouseTremorNative]::GetCursorPos([ref]$point)) {
-        [void][MouseTremorNative]::SetCursorPos($point.X + ($Pixels * $script:Direction), $point.Y)
+    $point = New-Object MouseJigglerNative+POINT
+    if ([MouseJigglerNative]::GetCursorPos([ref]$point)) {
+        [void][MouseJigglerNative]::SetCursorPos($point.X + ($Pixels * $script:Direction), $point.Y)
         Start-Sleep -Milliseconds 80
-        [void][MouseTremorNative]::SetCursorPos($point.X, $point.Y)
+        [void][MouseJigglerNative]::SetCursorPos($point.X, $point.Y)
         $script:Direction *= -1
     }
 })
@@ -110,12 +110,12 @@ $pressTimer.Add_Tick({
         )
         $screenPoint = $button.PointToScreen($buttonCenter)
 
-        [void][MouseTremorNative]::SetCursorPos($screenPoint.X, $screenPoint.Y)
+        [void][MouseJigglerNative]::SetCursorPos($screenPoint.X, $screenPoint.Y)
         [System.Windows.Forms.Application]::DoEvents()
         Start-Sleep -Milliseconds 80
 
-        $currentPoint = New-Object MouseTremorNative+POINT
-        if (-not [MouseTremorNative]::GetCursorPos([ref]$currentPoint)) {
+        $currentPoint = New-Object MouseJigglerNative+POINT
+        if (-not [MouseJigglerNative]::GetCursorPos([ref]$currentPoint)) {
             return
         }
 
@@ -128,9 +128,9 @@ $pressTimer.Add_Tick({
             return
         }
 
-        [MouseTremorNative]::mouse_event($mouseEventLeftDown, 0, 0, 0, [UIntPtr]::Zero)
+        [MouseJigglerNative]::mouse_event($mouseEventLeftDown, 0, 0, 0, [UIntPtr]::Zero)
         Start-Sleep -Milliseconds 120
-        [MouseTremorNative]::mouse_event($mouseEventLeftUp, 0, 0, 0, [UIntPtr]::Zero)
+        [MouseJigglerNative]::mouse_event($mouseEventLeftUp, 0, 0, 0, [UIntPtr]::Zero)
     }
     finally {
         $script:IsPressingButton = $false

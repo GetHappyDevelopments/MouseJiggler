@@ -1,4 +1,4 @@
-# MouseTremor
+# MouseJiggler
 
 Kleine Windows-Dialoganwendung, die den Mauszeiger regelmaessig minimal bewegt. Alle paar Sekunden setzt die Anwendung den Mauszeiger auf den Button und drueckt ihn per linkem Mausklick.
 
@@ -9,19 +9,19 @@ Die Mausbewegung pausiert, waehrend der Button gedrueckt wird.
 Doppelklick auf:
 
 ```text
-Start-MouseTremor.bat
+Start-MouseJiggler.bat
 ```
 
 Oder direkt in PowerShell:
 
 ```powershell
-.\MouseTremor.ps1
+.\MouseJiggler.ps1
 ```
 
 ## Optionen
 
 ```powershell
-.\MouseTremor.ps1 -PressIntervalSeconds 5 -MoveIntervalMilliseconds 1000 -Pixels 1
+.\MouseJiggler.ps1 -PressIntervalSeconds 5 -MoveIntervalMilliseconds 1000 -Pixels 1
 ```
 
 - `PressIntervalSeconds`: Abstand zwischen den automatischen Button-Druecken.
