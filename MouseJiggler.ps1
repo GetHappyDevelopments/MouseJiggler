@@ -3,8 +3,9 @@ param(
     [int]$PressIntervalSeconds = 5,
     [int]$MoveIntervalMilliseconds = 1000,
     [int]$Pixels = 1,
-    [int]$EndTimeHours = $null,
-    [int]$EndTimeMinutes = $null,
+    [string]$EndTime = $null,
+    [Nullable[int]]$EndTimeHours = $null,
+    [Nullable[int]]$EndTimeMinutes = $null,
     [bool]$ShutdownAfter = $false
 )
 
@@ -42,9 +43,115 @@ $mouseEventLeftDown = 0x0002
 $mouseEventLeftUp = 0x0004
 $script:Direction = 1
 $script:IsPressingButton = $false
+$script:IsPaused = $false
 $script:PressCount = 0
-$script:EndTime = $null
+$script:EndDateTime = $null
 $script:ShutdownAfter = $ShutdownAfter
+
+function Format-Countdown {
+    param(
+        [TimeSpan]$Remaining
+    )
+
+    if ($Remaining -lt [TimeSpan]::Zero) {
+        $Remaining = [TimeSpan]::Zero
+    }
+
+    $totalHours = [int][Math]::Floor($Remaining.TotalHours)
+    return "{0:00}:{1:00}:{2:00}" -f $totalHours, $Remaining.Minutes, $Remaining.Seconds
+}
+
+function Get-NextEndTime {
+    param(
+        [int]$Hours,
+        [int]$Minutes
+    )
+
+    $now = Get-Date
+    $endTime = Get-Date -Year $now.Year -Month $now.Month -Day $now.Day -Hour $Hours -Minute $Minutes -Second 0
+
+    if ($endTime -le $now) {
+        $endTime = $endTime.AddDays(1)
+    }
+
+    return $endTime
+}
+
+function Try-ParseEndTime {
+    param(
+        [string]$Text,
+        [ref]$Hours,
+        [ref]$Minutes
+    )
+
+    $match = [regex]::Match($Text.Trim(), "^(?<hours>[0-2][0-9]):(?<minutes>[0-5][0-9])$")
+
+    if (-not $match.Success) {
+        return $false
+    }
+
+    $parsedHours = [int]$match.Groups["hours"].Value
+    $parsedMinutes = [int]$match.Groups["minutes"].Value
+
+    if ($parsedHours -gt 23) {
+        return $false
+    }
+
+    $Hours.Value = $parsedHours
+    $Minutes.Value = $parsedMinutes
+    return $true
+}
+
+function Update-EndTimeDisplay {
+    if ($script:EndDateTime -eq $null) {
+        $endTimeStatusLabel.Text = "Keine Endzeit gesetzt."
+        $countdownValueLabel.Text = "--:--:--"
+        return
+    }
+
+    $remaining = $script:EndDateTime - (Get-Date)
+    $endTimeStatusLabel.Text = "Ende: $($script:EndDateTime.ToString("HH:mm"))"
+    $countdownValueLabel.Text = Format-Countdown -Remaining $remaining
+}
+
+function Set-EndTimeFromInput {
+    try {
+        $hours = 0
+        $minutes = 0
+
+        if (-not (Try-ParseEndTime -Text $endTimeInput.Text -Hours ([ref]$hours) -Minutes ([ref]$minutes))) {
+            [System.Windows.Forms.MessageBox]::Show(
+                "Bitte geben Sie eine gueltige Uhrzeit im Format HH:MM an, zum Beispiel 18:30.",
+                "Ungueltige Uhrzeit",
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Warning
+            )
+            return
+        }
+
+        $script:EndDateTime = Get-NextEndTime -Hours $hours -Minutes $minutes
+        $script:ShutdownAfter = $shutdownCheckbox.Checked
+        Update-EndTimeDisplay
+    }
+    catch {
+        [System.Windows.Forms.MessageBox]::Show(
+            "Fehler beim Setzen der Endzeit: $_",
+            "Fehler",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error
+        )
+    }
+}
+
+function Start-SystemShutdown {
+    $shutdownPath = Join-Path $env:SystemRoot "System32\shutdown.exe"
+
+    if (-not (Test-Path -LiteralPath $shutdownPath)) {
+        $shutdownPath = "shutdown.exe"
+    }
+
+    Start-Process -FilePath $shutdownPath -ArgumentList '/s /t 60 /c "MouseJiggler Endzeit erreicht"' -WindowStyle Hidden
+}
 
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
@@ -54,7 +161,7 @@ $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
 $form.MaximizeBox = $false
 $form.MinimizeBox = $true
-$form.ClientSize = New-Object System.Drawing.Size(360, 280)
+$form.ClientSize = New-Object System.Drawing.Size(380, 360)
 $form.KeyPreview = $true
 
 $titleLabel = New-Object System.Windows.Forms.Label
@@ -80,102 +187,107 @@ $button.Add_Click({
     $statusLabel.Text = "Button gedrueckt: $script:PressCount"
 })
 
+$pauseButton = New-Object System.Windows.Forms.Button
+$pauseButton.Text = "Pausieren"
+$pauseButton.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+$pauseButton.Size = New-Object System.Drawing.Size(120, 30)
+$pauseButton.Location = New-Object System.Drawing.Point(130, 146)
+
+$pauseStatusLabel = New-Object System.Windows.Forms.Label
+$pauseStatusLabel.Text = "Aktiv"
+$pauseStatusLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8)
+$pauseStatusLabel.AutoSize = $true
+$pauseStatusLabel.Location = New-Object System.Drawing.Point(26, 153)
+
+$pauseButton.Add_Click({
+    $script:IsPaused = -not $script:IsPaused
+
+    if ($script:IsPaused) {
+        $moveTimer.Stop()
+        $pressTimer.Stop()
+        $pauseButton.Text = "Fortsetzen"
+        $pauseStatusLabel.Text = "Pausiert"
+        $titleLabel.Text = "MouseJiggler pausiert"
+    }
+    else {
+        $moveTimer.Start()
+        $pressTimer.Start()
+        $pauseButton.Text = "Pausieren"
+        $pauseStatusLabel.Text = "Aktiv"
+        $titleLabel.Text = "MouseJiggler laeuft"
+    }
+})
+
 $endTimeLabel = New-Object System.Windows.Forms.Label
-$endTimeLabel.Text = "Endzeit (optional):"
+$endTimeLabel.Text = "Endzeit als Uhrzeit (optional):"
 $endTimeLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
 $endTimeLabel.AutoSize = $true
-$endTimeLabel.Location = New-Object System.Drawing.Point(26, 152)
+$endTimeLabel.Location = New-Object System.Drawing.Point(26, 194)
 
-$hoursLabel = New-Object System.Windows.Forms.Label
-$hoursLabel.Text = "Stunden:"
-$hoursLabel.AutoSize = $true
-$hoursLabel.Location = New-Object System.Drawing.Point(26, 178)
+$endTimeInputLabel = New-Object System.Windows.Forms.Label
+$endTimeInputLabel.Text = "Uhrzeit (HH:MM):"
+$endTimeInputLabel.AutoSize = $true
+$endTimeInputLabel.Location = New-Object System.Drawing.Point(26, 222)
 
-$hoursInput = New-Object System.Windows.Forms.TextBox
-$hoursInput.Width = 50
-$hoursInput.Location = New-Object System.Drawing.Point(90, 175)
-$hoursInput.Text = "00"
-
-$minutesLabel = New-Object System.Windows.Forms.Label
-$minutesLabel.Text = "Minuten:"
-$minutesLabel.AutoSize = $true
-$minutesLabel.Location = New-Object System.Drawing.Point(155, 178)
-
-$minutesInput = New-Object System.Windows.Forms.TextBox
-$minutesInput.Width = 50
-$minutesInput.Location = New-Object System.Drawing.Point(220, 175)
-$minutesInput.Text = "00"
+$endTimeInput = New-Object System.Windows.Forms.TextBox
+$endTimeInput.Width = 70
+$endTimeInput.Location = New-Object System.Drawing.Point(135, 219)
+$endTimeInput.Text = (Get-Date).AddHours(1).ToString("HH:mm")
 
 $setEndTimeButton = New-Object System.Windows.Forms.Button
 $setEndTimeButton.Text = "Endzeit setzen"
 $setEndTimeButton.Size = New-Object System.Drawing.Size(100, 28)
-$setEndTimeButton.Location = New-Object System.Drawing.Point(26, 206)
+$setEndTimeButton.Location = New-Object System.Drawing.Point(26, 250)
 
 $endTimeStatusLabel = New-Object System.Windows.Forms.Label
 $endTimeStatusLabel.Text = "Keine Endzeit gesetzt."
 $endTimeStatusLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8)
 $endTimeStatusLabel.AutoSize = $true
-$endTimeStatusLabel.Location = New-Object System.Drawing.Point(135, 212)
+$endTimeStatusLabel.Location = New-Object System.Drawing.Point(135, 256)
+
+$countdownLabel = New-Object System.Windows.Forms.Label
+$countdownLabel.Text = "Countdown:"
+$countdownLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$countdownLabel.AutoSize = $true
+$countdownLabel.Location = New-Object System.Drawing.Point(26, 292)
+
+$countdownValueLabel = New-Object System.Windows.Forms.Label
+$countdownValueLabel.Text = "--:--:--"
+$countdownValueLabel.Font = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Bold)
+$countdownValueLabel.AutoSize = $true
+$countdownValueLabel.Location = New-Object System.Drawing.Point(135, 288)
 
 $shutdownCheckbox = New-Object System.Windows.Forms.CheckBox
 $shutdownCheckbox.Text = "Computer herunterfahren"
 $shutdownCheckbox.AutoSize = $true
-$shutdownCheckbox.Location = New-Object System.Drawing.Point(26, 242)
+$shutdownCheckbox.Location = New-Object System.Drawing.Point(26, 326)
 $shutdownCheckbox.Checked = $ShutdownAfter
 
 $setEndTimeButton.Add_Click({
-    try {
-        $hours = [int]$hoursInput.Text
-        $minutes = [int]$minutesInput.Text
-
-        if ($hours -lt 0 -or $hours -gt 23 -or $minutes -lt 0 -or $minutes -gt 59) {
-            [System.Windows.Forms.MessageBox]::Show(
-                "Bitte geben Sie gueltiges Zeit an!`nStunden: 0-23`nMinuten: 0-59",
-                "Ungueltige Uhrzeit",
-                [System.Windows.Forms.MessageBoxButtons]::OK,
-                [System.Windows.Forms.MessageBoxIcon]::Warning
-            )
-            return
-        }
-
-        $now = Get-Date
-        $endTime = $now.AddDays(0) -replace $now.TimeOfDay, (New-TimeSpan -Hours $hours -Minutes $minutes)
-        $endTime = Get-Date -Year $now.Year -Month $now.Month -Day $now.Day -Hour $hours -Minute $minutes -Second 0
-
-        if ($endTime -le $now) {
-            $endTime = $endTime.AddDays(1)
-        }
-
-        $script:EndTime = $endTime
-        $script:ShutdownAfter = $shutdownCheckbox.Checked
-        $timeFormat = $endTime.ToString("HH:mm:ss")
-        $endTimeStatusLabel.Text = "Endzeit: $timeFormat"
-    }
-    catch {
-        [System.Windows.Forms.MessageBox]::Show(
-            "Fehler beim Setzen der Endzeit: $_",
-            "Fehler",
-            [System.Windows.Forms.MessageBoxButtons]::OK,
-            [System.Windows.Forms.MessageBoxIcon]::Error
-        )
-    }
+    Set-EndTimeFromInput
 })
 
 $form.Controls.Add($titleLabel)
 $form.Controls.Add($statusLabel)
 $form.Controls.Add($button)
+$form.Controls.Add($pauseButton)
+$form.Controls.Add($pauseStatusLabel)
 $form.Controls.Add($endTimeLabel)
-$form.Controls.Add($hoursLabel)
-$form.Controls.Add($hoursInput)
-$form.Controls.Add($minutesLabel)
-$form.Controls.Add($minutesInput)
+$form.Controls.Add($endTimeInputLabel)
+$form.Controls.Add($endTimeInput)
 $form.Controls.Add($setEndTimeButton)
 $form.Controls.Add($endTimeStatusLabel)
+$form.Controls.Add($countdownLabel)
+$form.Controls.Add($countdownValueLabel)
 $form.Controls.Add($shutdownCheckbox)
 
 $moveTimer = New-Object System.Windows.Forms.Timer
 $moveTimer.Interval = [Math]::Max(50, $MoveIntervalMilliseconds)
 $moveTimer.Add_Tick({
+    if ($script:IsPaused) {
+        return
+    }
+
     if ($script:IsPressingButton) {
         return
     }
@@ -192,6 +304,10 @@ $moveTimer.Add_Tick({
 $pressTimer = New-Object System.Windows.Forms.Timer
 $pressTimer.Interval = [Math]::Max(1, $PressIntervalSeconds) * 1000
 $pressTimer.Add_Tick({
+    if ($script:IsPaused) {
+        return
+    }
+
     $script:IsPressingButton = $true
 
     try {
@@ -234,21 +350,34 @@ $pressTimer.Add_Tick({
 $endTimeTimer = New-Object System.Windows.Forms.Timer
 $endTimeTimer.Interval = 1000
 $endTimeTimer.Add_Tick({
-    if ($script:EndTime -ne $null) {
+    if ($script:EndDateTime -ne $null) {
         $now = Get-Date
-        if ($now -ge $script:EndTime) {
+        Update-EndTimeDisplay
+
+        if ($now -ge $script:EndDateTime) {
             $moveTimer.Stop()
             $pressTimer.Stop()
             $endTimeTimer.Stop()
 
             if ($script:ShutdownAfter) {
-                [System.Windows.Forms.MessageBox]::Show(
-                    "Endzeit erreicht! Der Computer wird in 60 Sekunden heruntergefahren.`nDas kann mit 'shutdown /a' im Terminal abgebrochen werden.",
-                    "Endzeit erreicht",
-                    [System.Windows.Forms.MessageBoxButtons]::OK,
-                    [System.Windows.Forms.MessageBoxIcon]::Information
-                )
-                Start-Process "shutdown" -ArgumentList "/s /t 60 /c `"MouseJiggler Endzeit erreicht`""
+                try {
+                    Start-SystemShutdown
+
+                    [System.Windows.Forms.MessageBox]::Show(
+                        "Endzeit erreicht! Der Computer wird in 60 Sekunden heruntergefahren.`nDas kann mit 'shutdown /a' im Terminal abgebrochen werden.",
+                        "Endzeit erreicht",
+                        [System.Windows.Forms.MessageBoxButtons]::OK,
+                        [System.Windows.Forms.MessageBoxIcon]::Information
+                    )
+                }
+                catch {
+                    [System.Windows.Forms.MessageBox]::Show(
+                        "Endzeit erreicht, aber das Herunterfahren konnte nicht gestartet werden: $_",
+                        "Fehler beim Herunterfahren",
+                        [System.Windows.Forms.MessageBoxButtons]::OK,
+                        [System.Windows.Forms.MessageBoxIcon]::Error
+                    )
+                }
             }
             else {
                 [System.Windows.Forms.MessageBox]::Show(
@@ -265,6 +394,15 @@ $endTimeTimer.Add_Tick({
 })
 
 $form.Add_Shown({
+    if (-not [string]::IsNullOrWhiteSpace($EndTime)) {
+        $endTimeInput.Text = $EndTime
+        Set-EndTimeFromInput
+    }
+    elseif ($EndTimeHours -ne $null) {
+        $endTimeInput.Text = "{0:00}:{1:00}" -f $EndTimeHours, ([int]$EndTimeMinutes)
+        Set-EndTimeFromInput
+    }
+
     $moveTimer.Start()
     $pressTimer.Start()
     $endTimeTimer.Start()
