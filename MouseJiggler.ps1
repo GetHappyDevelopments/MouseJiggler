@@ -150,7 +150,7 @@ function Start-SystemShutdown {
         $shutdownPath = "shutdown.exe"
     }
 
-    Start-Process -FilePath $shutdownPath -ArgumentList '/s /t 60 /c "MouseJiggler Endzeit erreicht"' -WindowStyle Hidden
+    Start-Process -FilePath $shutdownPath -ArgumentList @('/s', '/f', '/t', '0') -WindowStyle Hidden
 }
 
 [System.Windows.Forms.Application]::EnableVisualStyles()
@@ -359,33 +359,15 @@ $endTimeTimer.Add_Tick({
             $pressTimer.Stop()
             $endTimeTimer.Stop()
 
+            $script:ShutdownAfter = $shutdownCheckbox.Checked
+
             if ($script:ShutdownAfter) {
                 try {
                     Start-SystemShutdown
-
-                    [System.Windows.Forms.MessageBox]::Show(
-                        "Endzeit erreicht! Der Computer wird in 60 Sekunden heruntergefahren.`nDas kann mit 'shutdown /a' im Terminal abgebrochen werden.",
-                        "Endzeit erreicht",
-                        [System.Windows.Forms.MessageBoxButtons]::OK,
-                        [System.Windows.Forms.MessageBoxIcon]::Information
-                    )
                 }
                 catch {
-                    [System.Windows.Forms.MessageBox]::Show(
-                        "Endzeit erreicht, aber das Herunterfahren konnte nicht gestartet werden: $_",
-                        "Fehler beim Herunterfahren",
-                        [System.Windows.Forms.MessageBoxButtons]::OK,
-                        [System.Windows.Forms.MessageBoxIcon]::Error
-                    )
+                    Write-Warning "Endzeit erreicht, aber das Herunterfahren konnte nicht gestartet werden: $_"
                 }
-            }
-            else {
-                [System.Windows.Forms.MessageBox]::Show(
-                    "Endzeit erreicht! Das Programm wird beendet.",
-                    "Endzeit erreicht",
-                    [System.Windows.Forms.MessageBoxButtons]::OK,
-                    [System.Windows.Forms.MessageBoxIcon]::Information
-                )
             }
 
             $form.Close()

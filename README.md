@@ -47,7 +47,7 @@ Liegt die eingegebene Uhrzeit bereits in der Vergangenheit, wird automatisch die
 
 Mit "Pausieren" werden Mausbewegung und automatische Button-Druecke angehalten. Der Countdown laeuft weiter und die gesetzte Endzeit bleibt unveraendert. Mit "Fortsetzen" wird die MouseJiggler-Funktion wieder gestartet.
 
-Das Herunterfahren kann mit `shutdown /a` im Terminal abgebrochen werden.
+Wenn "Computer herunterfahren" aktiviert ist, wird der Computer beim Erreichen der Endzeit ohne zusaetzliche Dialogmeldung sofort heruntergefahren.
 
 ## Beenden
 
